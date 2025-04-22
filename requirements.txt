@@ -1,0 +1,7 @@
+dlt[duckdb]
+duckdb
+requests
+python-dotenv
+great-expectations
+pytest
+loguru
