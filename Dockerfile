@@ -2,14 +2,13 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Copy requirements first (better caching)
+# Copy requirements first for better layer caching
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code from scripts/ dir to /app/scripts in the container
-COPY scripts/ /app/scripts/
+# Copy application code
 COPY . .
 
+# Set environment variables
 
-# Use CMD instead of ENTRYPOINT for flexibility
-CMD ["python", "scripts/run_pipeline.py"]
+ENTRYPOINT ["python", "scripts/run_pipeline.py"]
