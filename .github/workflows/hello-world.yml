@@ -1,0 +1,18 @@
+name: Hello World
+
+on:
+  # Allow running this workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  say-hello:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print Hello World
+        run: echo "Hello World!"
+      
+      - name: Multiple lines
+        run: |
+          echo "This is a multi-line command"
+          echo "Hello from GitHub Actions!"
+          echo "Current date is $(date)"
