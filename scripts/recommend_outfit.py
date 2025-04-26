@@ -1,10 +1,16 @@
-# scripts/recommend_outfit.py
 #!/usr/bin/env python3
+"""
+This script uses the data stored in duckdb database to recommend outfit. The output contains
+- weather report for the day
+- rain or wind expected or not
+- upper, mid, outer and lower layer clothing 
+- accessories such as sunglasses or umbrella if required
+"""
+
 import duckdb
 import pandas as pd
 import logging
 from datetime import datetime
-
 
 class OutfitRecommender:
     def __init__(self, db_path: str = "weather_data.duckdb"):
@@ -83,7 +89,7 @@ class OutfitRecommender:
         df = self.get_weather_data(date)
         
         if df is None:
-          return "No weather data available for specified date"
+            return "No weather data available for specified date"
           
         # Overall weather summary
         header_date = df['time'].dt.date.max().isoformat()
@@ -94,21 +100,41 @@ class OutfitRecommender:
         will_rain = (df['precipitation_mm'] > 0.2).any()
         strong_wind = df['wind_speed_10m_km_h'].max() > 30
 
+        # Get period data for summary
+        periods = self._split_by_period(df)
+        period_temps = {}
+        for period_name, subdf in periods.items():
+            if not subdf.empty:
+                min_temp = subdf['temperature_2m_c'].min()
+                max_temp = subdf['temperature_2m_c'].max()
+                period_temps[period_name] = f"{min_temp:.1f}–{max_temp:.1f}°C"
+            else:
+                period_temps[period_name] = "No data"
+
+        BOLD = '\033[1m'
+        UNDERLINE = '\033[4m'
+        END = '\033[0m'
+
+        # Generate summary with emojis
         summary_lines = [
-            f"Weather Summary for {header_date}:",
-            f" - Temperature range: {overall_min_temp:.1f}°C to {overall_max_temp:.1f}°C",
-            f" - Feels like: {overall_min_app:.1f}°C to {overall_max_app:.1f}°C",
-            f" - {'Rain expected' if will_rain else 'No rain expected'}",
-            f" - {'Strong winds' if strong_wind else 'Mild winds'}"
+            f"{BOLD}Weather Summary for {header_date} {END}",
+            f"- {BOLD}Overall Temperature range{END}: {overall_min_temp:.1f}°C to {overall_max_temp:.1f}°C (feels like {overall_min_app:.1f}°C to {overall_max_app:.1f}°C)"
         ]
+        
+        # Add period temperatures to summary
+        for period, temp_range in period_temps.items():
+            summary_lines.append(f"- {BOLD}{period}{END}: {temp_range}")
+            
+        # Add rain and wind info with emojis
+        summary_lines.append(f"- 🌧 {BOLD}{'Rain expected' if will_rain else 'No rain expected'}{END}")
+        summary_lines.append(f"- 💨 {BOLD}{'Strong winds' if strong_wind else 'Mild winds'}{END}")
+        
         summary = "\n".join(summary_lines)
 
         # Time-of-day recommendations
-        periods = self._split_by_period(df)
         recommendations = [summary, ""]
         for period_name, subdf in periods.items():
             if subdf.empty:
-                self.logger.info(f"Skipping {period_name}: no data")
                 recommendations.append(f"{period_name}: No data available")
             else:
                 rec = self._build_recommendation(subdf)
@@ -133,18 +159,17 @@ class OutfitRecommender:
 
         # Layer recommendations
         base = self._recommend_base_layer(max_temp, min_temp)
-        mid = self._recommend_mid_layer(avg_temp)
+        # Only recommend mid layer if temperature is below 5 degrees
+        mid = self._recommend_mid_layer(avg_temp) if min_temp < 5 else None
         outer = self._recommend_outer_layer(min_app, strong_wind)
         lower = self._recommend_lower_body(min_temp)
         accessories = self._recommend_accessories(
             will_rain, heavy_rain, max_temp, min_temp, strong_wind
         )
 
-        # Format output
-        lines = [
-            f"• Temp: {min_temp:.1f}–{max_temp:.1f}°C (feels like {min_app:.1f}–{max_app:.1f}°C)",
-            f"• Base layer: {base}",
-        ]
+        # Format output - more concise
+        lines = []
+        lines.append(f"• Upper layer: {base}")
         if mid:
             lines.append(f"• Mid layer: {mid}")
         if outer:
@@ -160,57 +185,53 @@ class OutfitRecommender:
         Recommend a base layer (first layer) based on temperature extremes.
         """
         if max_temp >= 30:
-            return "Light, breathable tee or tank"
+            return "Light breathable tee or tank top"
         if max_temp >= 25:
             return "Short-sleeve shirt"
         if max_temp >= 20:
-            return "Long-sleeve shirt or light tee"
+            return "Light tee or shirt"
         if max_temp >= 15:
-            return "Light sweater or thermal top"
+            return "Light to mid T-shirt or shirt"
         if max_temp >= 10:
-            return "Sweater or fleece top"
-        return "Thermal base layer"
+            return "Long-sleeve shirt or light sweater"
+        return "Thermal top or warm long-sleeve"
 
     def _recommend_mid_layer(self, avg_temp: float) -> str:
         """
-        Recommend a mid layer (e.g., sweater) when average temperature is cool.
+        Recommend a mid layer - now only when average temp is < 5°C
         """
-        if avg_temp >= 20:
-            return None
-        if avg_temp >= 15:
-            return "Light sweater or fleece"
-        if avg_temp >= 10:
-            return "Medium sweater or hoodie"
-        return "Heavy sweater or insulated mid-layer"
+        if avg_temp >= 0:
+            return "Warm sweater or fleece"
+        return "Heavy thermal layer or wool sweater"
 
     def _recommend_outer_layer(self, min_apparent_temp: float, strong_wind: bool) -> str:
         """
         Recommend an outer layer (jacket/coating) based on feels-like temp & wind.
         """
-        needs_wind = " with wind protection" if strong_wind else ""
+        needs_wind = " (wind-resistant)" if strong_wind else ""
         if min_apparent_temp >= 20:
             return None
         if min_apparent_temp >= 15:
             return f"Light jacket{needs_wind}"
         if min_apparent_temp >= 10:
-            return f"Medium jacket or windbreaker{needs_wind}"
+            return f"Medium jacket{needs_wind}"
         if min_apparent_temp >= 5:
             return f"Heavy coat or insulated jacket{needs_wind}"
-        return f"Winter coat with insulation and windproof shell{needs_wind}"
+        return f"Winter coat with insulation{needs_wind}"
 
     def _recommend_lower_body(self, min_temp: float) -> str:
         """
         Recommend lower body wear based on minimum temperature.
         """
         if min_temp >= 25:
-            return "Shorts or breathable pants"
+            return "Shorts or light pants"
         if min_temp >= 20:
             return "Light pants or skirt"
         if min_temp >= 15:
-            return "Jeans or chinos"
+            return "Regular pants or jeans"
         if min_temp >= 5:
             return "Thick pants or jeans with thermal lining"
-        return "Thermal leggings under pants or insulated trousers"
+        return "Thermal leggings under pants"
 
     def _recommend_accessories(
         self,
@@ -226,7 +247,7 @@ class OutfitRecommender:
         items = []
         if will_rain:
             items.append(
-                "Waterproof rain jacket and umbrella" if heavy_rain else "Umbrella or light raincoat"
+                "Waterproof jacket and umbrella" if heavy_rain else "Umbrella"
             )
         if min_temp < 10:
             items.append("Hat")
@@ -237,7 +258,7 @@ class OutfitRecommender:
         if max_temp > 25 and not will_rain:
             items.append("Sunglasses and sunscreen")
         if strong_wind and not will_rain:
-            items.append("Wind-resistant layer")
+            items.append("Windbreaker")
         return ", ".join(items) if items else None
 
     def close(self):
