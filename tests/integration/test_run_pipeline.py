@@ -1,6 +1,10 @@
 """
 THIS TEST IS NOT COMPLETE YET
 """
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+
 import duckdb
 import pandas as pd
 import os
@@ -9,6 +13,7 @@ from unittest.mock import patch, MagicMock
 from scripts import run_pipeline
 from scripts import fetch_weather
 from scripts import send_notification
+
 
 @pytest.fixture(scope="module")  # run once per test module
 def setup_test_db():
@@ -21,12 +26,10 @@ def setup_test_db():
 
     conn = duckdb.connect(db_path)
 
-    conn.execute("SET SCHEMA = open_meteo_weather")
-
     # Create a sample weather table
     conn.execute(
         """
-        CREATE TABLE open_meteo_weather.hourly_weather AS
+        CREATE TABLE hourly_weather AS
         SELECT * FROM (VALUES
             ('2025-04-27 06:00:00', 15.0, 14.0, 0.0, 70, 10, 15, 50, 10000),
             ('2025-04-27 12:00:00', 22.0, 21.0, 0.1, 60, 12, 18, 40, 10000),
@@ -57,8 +60,8 @@ def test_run_pipeline_success(setup_test_db, set_env_vars):
     Integration test for successful pipeline run.
     """
     # Patch fetch_weather.main to simulate successful data loading
-    with patch("fetch_weather.main") as mock_fetch_weather, \
-         patch("send_notification.send_email_notification") as mock_send_email:
+    with patch("scripts.fetch_weather.main") as mock_fetch_weather, \
+         patch("scripts.send_notification.send_email_notification") as mock_send_email:
 
         # Mock the behavior of fetch_weather.main to return successful load info
         mock_fetch_weather.return_value = "LoadInfoMock"
@@ -84,8 +87,8 @@ def test_run_pipeline_fetch_weather_failure(setup_test_db, set_env_vars):
     """
     Integration test for pipeline failure in fetch_weather step.
     """
-    with patch("fetch_weather.main") as mock_fetch_weather, \
-         patch("send_notification.send_email_notification") as mock_send_email:
+    with patch("scripts.fetch_weather.main") as mock_fetch_weather, \
+         patch("scripts.send_notification.send_email_notification") as mock_send_email:
 
         # Mock fetch_weather.main to raise an exception
         mock_fetch_weather.side_effect = Exception("Failed to fetch weather data")
@@ -108,8 +111,8 @@ def test_run_pipeline_send_notification_failure(setup_test_db, set_env_vars):
     Integration test for pipeline failure in send_notification step.
     """
     # Patch fetch_weather.main to simulate successful data loading
-    with patch("fetch_weather.main") as mock_fetch_weather, \
-         patch("send_notification.send_email_notification") as mock_send_email:
+    with patch("scripts.fetch_weather.main") as mock_fetch_weather, \
+         patch("scripts.send_notification.send_email_notification") as mock_send_email:
 
         # Mock the behavior of fetch_weather.main to return successful load info
         mock_fetch_weather.return_value = "LoadInfoMock"
@@ -126,5 +129,9 @@ def test_run_pipeline_send_notification_failure(setup_test_db, set_env_vars):
         # Assert that fetch_weather.main was called
         mock_fetch_weather.assert_called_once()
 
-        # Assert that send_email_notification was called with some content
-        mock_send_email.assert_called_once()
+        # Assert that send_email_notification was called
+        mock_send_email.assert_called()
+
+        # Optionally, check the arguments with which send_email_notification was called
+        email_content = mock_send_email.call_args[0][0]
+        assert "Weather Summary" in email_content
