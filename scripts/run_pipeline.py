@@ -17,9 +17,9 @@ import time
 from datetime import datetime
 
 # Import pipeline components
-from scripts import fetch_weather
-from scripts.recommend_outfit import OutfitRecommender
-from scripts.send_notification import send_email_notification
+import fetch_weather
+from recommend_outfit import OutfitRecommender
+from send_notification import send_email_notification
 
 # Configure logging
 logging.basicConfig(
