@@ -111,23 +111,19 @@ class OutfitRecommender:
             else:
                 period_temps[period_name] = "No data"
 
-        BOLD = '\033[1m'
-        UNDERLINE = '\033[4m'
-        END = '\033[0m'
-
         # Generate summary with emojis
         summary_lines = [
-            f"{BOLD}Weather Summary for {header_date} {END}",
-            f"- {BOLD}Overall Temperature range{END}: {overall_min_temp:.1f}°C to {overall_max_temp:.1f}°C (feels like {overall_min_app:.1f}°C to {overall_max_app:.1f}°C)"
+            f"Weather Summary for {header_date}",
+            f"- Overall Temperature range: {overall_min_temp:.1f}°C to {overall_max_temp:.1f}°C (feels like {overall_min_app:.1f}°C to {overall_max_app:.1f}°C)"
         ]
         
         # Add period temperatures to summary
         for period, temp_range in period_temps.items():
-            summary_lines.append(f"- {BOLD}{period}{END}: {temp_range}")
+            summary_lines.append(f"- {period}: {temp_range}")
             
         # Add rain and wind info with emojis
-        summary_lines.append(f"- 🌧 {BOLD}{'Rain expected' if will_rain else 'No rain expected'}{END}")
-        summary_lines.append(f"- 💨 {BOLD}{'Strong winds' if strong_wind else 'Mild winds'}{END}")
+        summary_lines.append(f"- 🌧 {'Rain expected' if will_rain else 'No rain expected'}")
+        summary_lines.append(f"- 💨 {'Strong winds' if strong_wind else 'Mild winds'}")
         
         summary = "\n".join(summary_lines)
 
